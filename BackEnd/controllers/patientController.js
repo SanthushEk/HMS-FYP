@@ -4,13 +4,23 @@ const path = require("path");
 const { relative } = require("path/win32");
 
 exports.registerPatient = async (req, res) => {
-  const { fullName, dob, gender, phone, email, nic, address, ward, bedNo } =
-    req.body;
+  const {
+    fullName,
+    dob,
+    gender,
+    phone,
+    email,
+    nic,
+    address,
+    ward,
+    bedNo,
+    wallet_address, // 👈 New field
+  } = req.body;
 
   const patientSql = `
       INSERT INTO patients_personal_info 
-      (full_name, dob, gender, phone, email, nic, address, ward, bedNo) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+      (full_name, dob, gender, phone, email, nic, address, ward, bedNo, wallet_address) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`; // 👈 10 values
 
   try {
     const [patientResult] = await db.execute(patientSql, [
@@ -23,6 +33,7 @@ exports.registerPatient = async (req, res) => {
       address,
       ward || null,
       bedNo || null,
+      wallet_address || null, // 👈 Add this value
     ]);
 
     res.status(201).json({

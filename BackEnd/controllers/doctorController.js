@@ -3,20 +3,45 @@ const crypto = require("crypto");
 const path = require("path");
 
 exports.registerDoctor = async (req, res) => {
-  const { name, dob, gender, phone, email, nic, medicalId, address, specialty } = req.body;
+  const {
+    name,
+    dob,
+    gender,
+    phone,
+    email,
+    nic,
+    medicalId,
+    address,
+    specialty,
+    wallet_address, // 👈 New field
+  } = req.body;
 
-  const doctorSql = `INSERT INTO doctors (name, dob, gender, phone, email, nic, medical_id, address, specialty) 
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+  const doctorSql = `
+    INSERT INTO doctors 
+    (name, dob, gender, phone, email, nic, medical_id, address, specialty, wallet_address) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
   try {
-    const [doctorResult] = await db.execute(doctorSql, [name, dob, gender, phone, email, nic, medicalId, address, specialty]);
+    const [doctorResult] = await db.execute(doctorSql, [
+      name,
+      dob,
+      gender,
+      phone,
+      email,
+      nic,
+      medicalId,
+      address,
+      specialty,
+      wallet_address || null, 
+    ]);
 
     // Set medical_id as username and NIC as the default password
     const username = medicalId;
     const password = crypto.createHash("sha256").update(nic).digest("hex");
 
-    const userSql = `INSERT INTO users (username, password, role, doctor_id) 
-                     VALUES (?, ?, 'doctor', ?)`;
+    const userSql = `
+      INSERT INTO users (username, password, role, doctor_id) 
+      VALUES (?, ?, 'doctor', ?)`;
 
     await db.execute(userSql, [username, password, doctorResult.insertId]);
 
