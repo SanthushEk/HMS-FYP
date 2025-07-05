@@ -327,9 +327,8 @@ exports.saveOrUpdateMedicalCondition = async (req, res) => {
 // Get General Information by patient ID
 exports.getMedicalInfoByPatientId = async (req, res) => {
   const { patientId } = req.params;
-
   try {
-    // Query to fetch general information for the patient
+
     const [medicalInfo] = await db.execute(
       "SELECT * FROM medical_conditions WHERE patient_id = ?",
       [patientId]
@@ -339,7 +338,7 @@ exports.getMedicalInfoByPatientId = async (req, res) => {
       return res.status(404).json({ message: "Medical information not found" });
     }
 
-    res.status(200).json(medicalInfo[0]); // Return the first (and only) result
+    res.status(200).json(medicalInfo[0]); 
   } catch (error) {
     console.error("Error fetching Medical info:", error);
     res.status(500).json({ message: "Database error: " + error.message });
@@ -575,15 +574,140 @@ exports.addDoctorNote = async (req, res) => {
     res.status(500).json({ message: "Database error: " + error.message });
   }
 };
+//Add Prescription detail
+exports.addPrescription = async (req, res) => {
+  const {
+    patient_id,
+    doctor_name,
+    prescription_date,
+    diagnosis,
+    allergy_info,
+    medicines // Array of medicines
+  } = req.body;
+
+  // 1. Insert the prescription data into the prescriptions table
+  const insertPrescriptionSql = `
+    INSERT INTO prescriptions (patient_id, doctor_name, prescription_date, diagnosis, allergy_info)
+    VALUES (?, ?, ?, ?, ?)
+  `;
+
+  try {
+    const [prescriptionResult] = await db.execute(insertPrescriptionSql, [
+      patient_id,
+      doctor_name,
+      prescription_date,
+      diagnosis,
+      allergy_info,
+    ]);
+
+    // 2. Capture the prescription_id from the inserted prescription
+    const prescription_id = prescriptionResult.insertId;
+
+    // 3. Prepare the medicine insertion query for multiple medicines
+    const insertMedicinesSql = `
+      INSERT INTO prescription_medicines (prescription_id, medicine_name, dosage, frequency)
+      VALUES ?
+    `;
+
+    // Prepare values for the medicines array to be inserted in one query
+    const medicinesValues = medicines.map((medicine) => [
+      prescription_id,
+      medicine.medicine_name,
+      medicine.dosage,
+      medicine.frequency,
+    ]);
+
+    // 4. Insert medicines into the prescription_medicines table
+    await db.query(insertMedicinesSql, [medicinesValues]);
+
+    // 5. Return success response
+    return res.status(200).json({
+      message: "Prescription added successfully!",
+      prescription_id,
+    });
+  } catch (error) {
+    console.error("Database error:", error);
+    return res.status(500).json({ message: "Database error: " + error.message });
+  }
+};
 
 //Get Prescription Detail
 exports.getAllPrescription= async (req, res) => {
+  const { patientId } = req.params;
+
+  const prescriptionQuery = `
+    SELECT 
+      p.prescription_id,
+      p.patient_id,
+      p.doctor_name,
+      p.prescription_date,
+      p.diagnosis,
+      p.allergy_info,
+      pm.medicine_name,
+      pm.dosage,
+      pm.frequency
+    FROM prescriptions p
+    LEFT JOIN prescription_medicines pm
+      ON p.prescription_id = pm.prescription_id
+    WHERE p.patient_id = ?
+  `;
+
   try {
-    const sql = "SELECT * FROM prescriptions";
-    const [result] = await db.execute(sql);
-    res.status(200).json(result);
+    const [prescriptionData] = await db.execute(prescriptionQuery, [patientId]);
+
+    if (prescriptionData.length === 0) {
+      return res.status(404).json({ message: "No prescriptions found." });
+    }
+
+    // Group the medicines by prescription_id
+    const prescriptions = [];
+    let currentPrescription = null;
+
+    prescriptionData.forEach((row) => {
+      if (currentPrescription?.prescription_id !== row.prescription_id) {
+        currentPrescription = {
+          prescription_id: row.prescription_id,
+          patient_id: row.patient_id,
+          doctor_name: row.doctor_name,
+          prescription_date: row.prescription_date,
+          diagnosis: row.diagnosis,
+          allergy_info: row.allergy_info,
+          medicines: [],
+        };
+        prescriptions.push(currentPrescription);
+      }
+
+      // Push the medicine details into the current prescription's medicines array
+      currentPrescription.medicines.push({
+        medicine_name: row.medicine_name,
+        dosage: row.dosage,
+        frequency: row.frequency,
+      });
+    });
+
+    res.status(200).json(prescriptions);
   } catch (error) {
-    console.error("Database error:", error);
+    console.error("Error fetching prescriptions with medicines:", error);
     res.status(500).json({ message: "Database error: " + error.message });
+  }
+};
+
+// Delete prescription
+exports.deletePrescription = async (req, res) => {
+  const { prescriptionId } = req.params;
+
+  try {
+    // Start by deleting associated medicines from prescription_medicines table
+    const deleteMedicinesSql = `DELETE FROM prescription_medicines WHERE prescription_id = ?`;
+    await db.execute(deleteMedicinesSql, [prescriptionId]);
+
+    // Then, delete the prescription from prescriptions table
+    const deletePrescriptionSql = `DELETE FROM prescriptions WHERE prescription_id = ?`;
+    await db.execute(deletePrescriptionSql, [prescriptionId]);
+
+    res.status(200).json({ message: "Prescription deleted successfully." });
+  } catch (error) {
+    console.error("Error deleting prescription:", error);
+    res.status(500).json({ message: "Error deleting prescription: " + error.message });
   }
 };

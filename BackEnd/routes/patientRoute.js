@@ -3,6 +3,7 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const patientController = require("../controllers/patientController");
+const reportController = require ("../controllers/reportController");
 
 const router = express.Router();
 const uploadDir = path.join(__dirname, "../uploads");
@@ -55,4 +56,9 @@ router.get("/:patientId/investigations", patientController.getAllDoctorNotes);
 router.delete("/:patientId/investigations/:investigationId", patientController.deleteInvestigations);
 router.post("/:patientId/add_note", patientController.addDoctorNote);
 
+router.get("/:patientId/prescription", patientController.getAllPrescription);
+router.post("/:patientId/add_prescription", patientController.addPrescription);
+router.delete("/:patientId/prescription/:prescriptionId", patientController.deletePrescription);
+
+router.post('/:patientId/upload-blood-test-report',reportController.uploadBloodTestReport);
 module.exports = router;
